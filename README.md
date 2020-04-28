@@ -21,7 +21,7 @@ Once the data is scrapped from the website, it is uploded in an RDS hosted in AW
 The values of accuracy were impacted, in almost 20%, by using the previous outcomes between matches for the same teams playing the match to be predicted.
 Running Anova for different values of accuracy obtained for each model and changing the seed, allowed to confirm that there is significant difference between at least one model and the rest.
 According to Tukey test, it could be confirmed that the best model, in terms of accuracy, is the Classification and Regression Trees model with a significant difference statistically proven with the rest of the models.
-![Image of Accuracy](https://stuedu-my.sharepoint.com/personal/m0859217_stu_edu/Documents/Accuracy.png)
+![Image of Accuracy](https://drive.google.com/file/d/1gdTyj2aWnl2T6VIzTlwT0fRWJYasEMed/view?usp=sharing)
 # **Predicting the next round**
 The model predicted the Round 30 in the season 19-20 for the English Premier League
 Away         | Week          | Season      | Home   | Prediction
