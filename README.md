@@ -22,7 +22,7 @@ The values of accuracy were impacted, in almost 20%, by using the previous outco
 Running Anova for different values of accuracy obtained for each model and changing the seed, allowed to confirm that there is significant difference between at least one model and the rest.
 According to Tukey test, it could be confirmed that the best model, in terms of accuracy, is the Classification and Regression Trees model with a significant difference statistically proven with the rest of the models.
 
-![Accuracy](https://drive.google.com/file/d/1nYrHPjoLFJ6MsUhwo2gWnUccfQxad3Re/view?usp=sharing)
+![Accuracy](https://drive.google.com/file/d/1nYrHPjoLFJ6MsUhwo2gWnUccfQxad3Re/view)
 
 # **Predicting the next round**
 The model predicted the Round 30 in the season 19-20 for the English Premier League
