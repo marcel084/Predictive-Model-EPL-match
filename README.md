@@ -23,7 +23,7 @@ The following libraries are required
 * `library(rpart.plot)`
 
 # **The Process**
-Run the EPLpredictor.rmd. This Notebook does the following: 
+The process is detailed in the paper enclosed. The code is structured the EPLpredictor.rmd. This Notebook does the following: 
 1. a) Scrapes match results using rvest from [FBref](https://fbref.com/en/comps/9/schedule/Premier-League-Fixtures)
 1. b) Transform data into datasets with variables used to predict the outcome in a match
 1. c) Exploratory data analysis for feature selection
