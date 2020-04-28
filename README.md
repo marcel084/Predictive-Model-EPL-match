@@ -5,6 +5,23 @@ This project is related to sports analytics and more specifically to the outcome
 -Draw
 These three outcomes are what makes the prediction, for a soccer game in EPL, more complex than for some other sports like baseball or basketball. The main goal for this project is described as follows:
 What is the best classification model, in terms of accuracy, to predict an EPL game using data in real time?
+## Libraries
+The following libraries are required
+* `library(RMySQL)`
+* `library(RODBC)`
+* `library(tidyverse)`
+* `library(purrr)`
+* `ibrary(magrittr)`
+* `library(data.table)`
+* `library(caTools)`
+* `library(e1071)`
+* `library(zoo)`
+* `library(class)`
+* `library(rpart)`
+* `library(nnet)`
+* `library(caret)`
+* `library(rpart.plot)`
+
 # **The Process**
 Run the EPLpredictor.rmd. This Notebook does the following: 
 1. a) Scrapes match results using rvest from [FBref](https://fbref.com/en/comps/9/schedule/Premier-League-Fixtures)
