@@ -25,8 +25,8 @@ The following libraries are required
 
 # **The Process**
 The process is detailed in the paper enclosed. The code is structured the EPLpredictor.rmd. This Notebook does the following: 
-1. a) Scrapes match results using rvest from [FBref](https://fbref.com/en/comps/9/schedule/Premier-League-Fixtures)
-1. b) Transform data into datasets with variables used to predict the outcome in a match
+1. a) Scrapping match results using rvest from [FBref](https://fbref.com/en/comps/9/schedule/Premier-League-Fixtures)
+1. b) Transforming data into datasets with variables used to predict the outcome in a match
 1. c) Exploratory data analysis for feature selection
 1. d) Modeling with the variables obtained from general performance for each Team
 1. e) Adding variable history performance matches
