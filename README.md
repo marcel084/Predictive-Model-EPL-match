@@ -1,8 +1,8 @@
 # **Predictive Model EPL match with R**
 This project is related to sports analytics and more specifically to the outcome prediction for a soccer game in the English Premier League. A soccer game in this league has three possible outcomes:
-- Home Team Victory
-- Away Team Victory
-- Draw  
+- Home Team Victory.
+- Away Team Victory.
+- Draw.  
 These three outcomes are what makes the prediction, for a soccer game in EPL, more complex than for some other sports like baseball or basketball. The main goal for this project is described as follows:
 What is the best classification model, in terms of accuracy, to predict an EPL game using data in real time?
 ## Libraries
