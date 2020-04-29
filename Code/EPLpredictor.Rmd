@@ -1,0 +1,1155 @@
+---
+title: "EPL Predictive Model"
+Class: Big Data Analytics Capstone
+output:
+  html_document:
+    df_print: paged
+Author: Marcel Socorro
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+# Libraries
+library(RMySQL)
+library(RODBC)
+library(rvest)
+library(tidyverse)
+library(purrr)
+library(magrittr)
+library(data.table)
+library(caTools)
+library(e1071)
+library(zoo)
+library(class)
+library(rpart)
+library(nnet)
+library(caret)
+library(rpart.plot)
+```
+```{r}
+#Setting connection with the RDS
+#con <- dbConnect(MySQL(),
+#  user = 'admin',
+#  password = 'Fp6gVeOThMKPG8rTOb1s',
+#  host = 'capstone.cil3bhyzpknn.us-east-1.rds.amazonaws.com',
+#  dbname = 'EPL',client.flag=CLIENT_MULTI_STATEMENTS)
+```
+# Scrapping data from website and uploads data into an RDS hosted in AWS
+```{r}
+# Get Resuts Table
+url <- "https://fbref.com/en/comps/9/schedule/Premier-League-Fixtures"
+epl2019 <- url %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_3232_1"]') %>%
+  html_table()
+epl2019 <- epl2019[[1]]
+epl2019 <- epl2019[,-c(6,8)]
+epl2019$Season<- 19
+epl2019$Score<- gsub("–", "_",epl2019$Score)
+epl2019$Attendance<- gsub(",", "",epl2019$Attendance)
+epl2019<-epl2019[!is.na(epl2019$Wk), ]
+#dbWriteTable(con, "Match2019", epl2019, append = TRUE)
+#dbDisconnect(con)
+```
+```{r}
+# Get Resuts Table 2018-2019
+url1 <- "https://fbref.com/en/comps/9/1889/schedule/2018-2019-Premier-League-Fixtures"
+epl2018 <- url1 %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_1889_1"]') %>%
+  html_table()
+epl2018 <- epl2018[[1]]
+epl2018 <- epl2018[,-c(6,8)]
+epl2018$Season<- 18
+epl2018$Score<- gsub("–", "_",epl2018$Score)
+epl2018$Attendance<- gsub(",", "",epl2018$Attendance)
+epl2018<-epl2018[!is.na(epl2018$Wk), ]
+#dbWriteTable(con, "Match2018", epl2018, append = TRUE)
+#dbDisconnect(con)
+```
+```{r}
+# Get Resuts Table 2017-2018
+url2 <- "https://fbref.com/en/comps/9/1631/schedule/2017-2018-Premier-League-Fixtures"
+epl2017 <- url2 %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_1631_1"]') %>%
+  html_table()
+epl2017 <- epl2017[[1]]
+epl2017 <- epl2017[,-c(6,8)]
+epl2017$Season<- 17
+epl2017$Score<- gsub("–", "_",epl2017$Score)
+epl2017$Attendance<- gsub(",", "",epl2017$Attendance)
+epl2017<-epl2017[!is.na(epl2017$Wk), ]
+#dbWriteTable(con, "Match2017", epl2017, append = TRUE)
+#dbDisconnect(con)
+```
+
+```{r}
+# Get Resuts Table 2016-2017
+url2016 <- "https://fbref.com/en/comps/9/1526/schedule/2016-2017-Premier-League-Fixtures"
+epl2016 <- url2016 %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_1526_1"]') %>%
+  html_table()
+epl2016 <- epl2016[[1]]
+epl2016$Season<- 16
+epl2016$Score<- gsub("–", "_",epl2016$Score)
+epl2016$Attendance<- gsub(",", "",epl2016$Attendance)
+epl2016<-epl2016[!is.na(epl2016$Wk), ]
+#dbWriteTable(con, "Match2016", epl2016, append = TRUE)
+#dbDisconnect(con)
+```
+```{r}
+# Get Resuts Table 2015-2016
+url2015 <- "https://fbref.com/en/comps/9/1467/schedule/2015-2016-Premier-League-Fixtures"
+epl2015 <- url2015 %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_1467_1"]') %>%
+  html_table()
+epl2015 <- epl2015[[1]]
+epl2015$Season<- 15
+epl2015$Score<- gsub("–", "_",epl2015$Score)
+epl2015$Attendance<- gsub(",", "",epl2015$Attendance)
+epl2015<-epl2015[!is.na(epl2015$Wk), ]
+#dbWriteTable(con, "Match2015", epl2015, append = TRUE)
+#dbDisconnect(con)
+```
+```{r}
+# Get Resuts Table 2014-2015
+url2014 <- "https://fbref.com/en/comps/9/733/schedule/2014-2015-Premier-League-Fixtures"
+epl2014 <- url2014 %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="sched_ks_733_1"]') %>%
+  html_table()
+epl2014 <- epl2014[[1]]
+epl2014$Season<- 14
+epl2014$Score<- gsub("–", "_",epl2014$Score)
+epl2014$Attendance<- gsub(",", "",epl2014$Attendance)
+epl2014<-epl2014[!is.na(epl2014$Wk), ]
+#dbWriteTable(con, "Match2014", epl2014, append = TRUE)
+#dbDisconnect(con)
+```
+
+# Transforming the data for all seasons. Creating variable points from score and dropping rows between rounds
+```{r}
+epl2019$Date<- as.Date(epl2019$Date)
+epl19 <- epl2019[ , !duplicated(colnames(epl2019))]
+epl19 <- epl19 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl19$HomeGoals <- as.numeric(substr(epl19$Score,1,1))
+epl19$AwayGoals <- as.numeric(substr(epl19$Score,3,3))
+epl19$Result <- "D"
+epl19$Result[epl19$HomeGoals > epl19$AwayGoals] <- "H"
+epl19$Result[epl19$HomeGoals < epl19$AwayGoals] <- "A"
+epl19$HomePoints <- 1
+epl19$HomePoints[epl19$HomeGoals > epl19$AwayGoals] <- 3
+epl19$HomePoints[epl19$HomeGoals < epl19$AwayGoals] <- 0
+epl19$AwayPoints <- 1
+epl19$AwayPoints[epl19$HomeGoals > epl19$AwayGoals] <- 0
+epl19$AwayPoints[epl19$HomeGoals < epl19$AwayGoals] <- 3
+epl19<-drop_na(epl19)
+```
+```{r}
+epl2018$Date<- as.Date(epl2018$Date)
+epl18 <- epl2018[ , !duplicated(colnames(epl2018))]
+epl18 <- epl18 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl18$HomeGoals <- as.numeric(substr(epl18$Score,1,1))
+epl18$AwayGoals <- as.numeric(substr(epl18$Score,3,3))
+epl18$Result <- "D"
+epl18$Result[epl18$HomeGoals > epl18$AwayGoals] <- "H"
+epl18$Result[epl18$HomeGoals < epl18$AwayGoals] <- "A"
+epl18$HomePoints <- 1
+epl18$HomePoints[epl18$HomeGoals > epl18$AwayGoals] <- 3
+epl18$HomePoints[epl18$HomeGoals < epl18$AwayGoals] <- 0
+epl18$AwayPoints <- 1
+epl18$AwayPoints[epl18$HomeGoals > epl18$AwayGoals] <- 0
+epl18$AwayPoints[epl18$HomeGoals < epl18$AwayGoals] <- 3
+epl18<-drop_na(epl18)
+```
+```{r}
+epl2017$Date<- as.Date(epl2017$Date)
+epl17 <- epl2017[ , !duplicated(colnames(epl2017))]
+epl17 <- epl17 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl17$HomeGoals <- as.numeric(substr(epl17$Score,1,1))
+epl17$AwayGoals <- as.numeric(substr(epl17$Score,3,3))
+epl17$Result <- "D"
+epl17$Result[epl17$HomeGoals > epl17$AwayGoals] <- "H"
+epl17$Result[epl17$HomeGoals < epl17$AwayGoals] <- "A"
+epl17$HomePoints <- 1
+epl17$HomePoints[epl17$HomeGoals > epl17$AwayGoals] <- 3
+epl17$HomePoints[epl17$HomeGoals < epl17$AwayGoals] <- 0
+epl17$AwayPoints <- 1
+epl17$AwayPoints[epl17$HomeGoals > epl17$AwayGoals] <- 0
+epl17$AwayPoints[epl17$HomeGoals < epl17$AwayGoals] <- 3
+epl17<-drop_na(epl17)
+```
+```{r}
+epl2016$Date<- as.Date(epl2016$Date)
+epl16 <- epl2016[ , !duplicated(colnames(epl2016))]
+epl16 <- epl16 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl16$HomeGoals <- as.numeric(substr(epl16$Score,1,1))
+epl16$AwayGoals <- as.numeric(substr(epl16$Score,3,3))
+epl16$Result <- "D"
+epl16$Result[epl16$HomeGoals > epl16$AwayGoals] <- "H"
+epl16$Result[epl16$HomeGoals < epl16$AwayGoals] <- "A"
+epl16$HomePoints <- 1
+epl16$HomePoints[epl16$HomeGoals > epl16$AwayGoals] <- 3
+epl16$HomePoints[epl16$HomeGoals < epl16$AwayGoals] <- 0
+epl16$AwayPoints <- 1
+epl16$AwayPoints[epl16$HomeGoals > epl16$AwayGoals] <- 0
+epl16$AwayPoints[epl16$HomeGoals < epl16$AwayGoals] <- 3
+epl16<-drop_na(epl16)
+```
+```{r}
+epl2015$Date<- as.Date(epl2015$Date)
+epl15 <- epl2015[ , !duplicated(colnames(epl2015))]
+epl15 <- epl15 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl15$HomeGoals <- as.numeric(substr(epl15$Score,1,1))
+epl15$AwayGoals <- as.numeric(substr(epl15$Score,3,3))
+epl15$Result <- "D"
+epl15$Result[epl15$HomeGoals > epl15$AwayGoals] <- "H"
+epl15$Result[epl15$HomeGoals < epl15$AwayGoals] <- "A"
+epl15$HomePoints <- 1
+epl15$HomePoints[epl15$HomeGoals > epl15$AwayGoals] <- 3
+epl15$HomePoints[epl15$HomeGoals < epl15$AwayGoals] <- 0
+epl15$AwayPoints <- 1
+epl15$AwayPoints[epl15$HomeGoals > epl15$AwayGoals] <- 0
+epl15$AwayPoints[epl15$HomeGoals < epl15$AwayGoals] <- 3
+epl15<-drop_na(epl15)
+```
+```{r}
+epl2014$Date<- as.Date(epl2014$Date)
+epl14 <- epl2014[ , !duplicated(colnames(epl2014))]
+epl14 <- epl14 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl14$HomeGoals <- as.numeric(substr(epl14$Score,1,1))
+epl14$AwayGoals <- as.numeric(substr(epl14$Score,3,3))
+epl14$Result <- "D"
+epl14$Result[epl14$HomeGoals > epl14$AwayGoals] <- "H"
+epl14$Result[epl14$HomeGoals < epl14$AwayGoals] <- "A"
+epl14$HomePoints <- 1
+epl14$HomePoints[epl14$HomeGoals > epl14$AwayGoals] <- 3
+epl14$HomePoints[epl14$HomeGoals < epl14$AwayGoals] <- 0
+epl14$AwayPoints <- 1
+epl14$AwayPoints[epl14$HomeGoals > epl14$AwayGoals] <- 0
+epl14$AwayPoints[epl14$HomeGoals < epl14$AwayGoals] <- 3
+epl14<-drop_na(epl14)
+```
+```{r}
+# Combining all dataframes 
+epltotal<-rbind(epl19,epl18,epl17,epl16,epl15,epl14)
+```
+```{r}
+#function MinMAx
+MinMax<-function(x){
+  return((x- min(x)) /(max(x)-min(x)))
+}
+```
+
+```{r}
+#Creating the function with all the variables involved measured by Season except previous matches
+tableEPL<-function(x){
+  acc <-
+    data.frame(Season = factor(),
+               Wk = integer(),
+               Team = factor(),
+               GF = integer(),
+               GA = integer(),
+               Points = integer(),
+               HomeAway = factor(),
+               Diff = integer(),
+               CumPoints = integer(),
+               CumDifGoal = integer (),
+               CumAvgPoints = integer(),
+               CumPointsHA = integer(),
+               CumDifGoalHA = integer (),
+               CumAvgPointsHA = integer())             
+  for (i in 1: 38) {
+    iDay<-subset(x,Wk=i)
+    iHome<-iDay[,c(1,2,6,11,12,14)]
+    iAway<-iDay[,c(1,2,8,12,11,15)]
+    iHome$HomeAway<-"H"
+    iAway$HomeAway<-"A"
+      iHome<-iHome%>%
+  rename(
+    Team=Home,
+    GF=HomeGoals,
+    GA=AwayGoals,
+    Points=HomePoints)
+    iAway<-iAway%>%
+  rename(
+    Team=Away,
+    GF=AwayGoals,
+    GA=HomeGoals,
+    Points=AwayPoints)
+  acc<-rbind(iHome,iAway)
+  acc$Diff<-acc$GF-acc$GA
+  accOrd<-acc[order(acc$Season,acc$Team,acc$Wk),]
+  accOrd<- data.frame(accOrd %>% group_by(Season,Team) %>% 
+  mutate(Cum_Points = cumsum(Points), CumDifGoal = cumsum(Diff), CumAvgPoints = cummean(Points) ))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Team,HomeAway) %>% 
+  mutate(Cum_PointsHA = cumsum(Points), CumDifGoalHA = cumsum(Diff), CumAvgPointsHA = cummean(Points) ))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk) %>% 
+  mutate(CumPointsNormalized=MinMax(Cum_Points)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk,HomeAway) %>% 
+  mutate(CumPointsNormalizedHA=MinMax(Cum_PointsHA)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk) %>% 
+  mutate(CumDifGoalNormalized=MinMax(CumDifGoal)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk,HomeAway) %>% 
+  mutate(CumDifGoalNormalizedHA=MinMax(CumDifGoalHA)))
+  accOrd$AvgPointsL5G<-rollmeanr(accOrd$Points, k = 5, fill = NA)
+  accOrd$AvgDifGoalL5G<-rollmeanr(accOrd$Diff, k = 5, fill = NA)
+  accOrd<-data.frame(accOrd %>% group_by(Season,Team)%>%
+  mutate(Cum_PointsRot=lag(Cum_Points),CumDifGoalRot=lag(CumDifGoal),CumAvgPointsRot=lag(CumAvgPoints),CumPointsNormalizedRot=lag(CumPointsNormalized),CumDifGoalNormalizedRot=lag(CumDifGoalNormalized),AvgPointsL5GRot=lag(AvgPointsL5G),AvgDifGoalL5GRot=lag(AvgDifGoalL5G)))
+  accOrd<-data.frame(accOrd %>% group_by(Season,Team,HomeAway)%>%
+mutate(Cum_PointsHARot=lag(Cum_PointsHA),Cum_DifGoalHARot=lag(CumDifGoalHA),CumAvgPointsHARot=lag(CumAvgPointsHA),CumPointsHANormalizedRot=lag(CumPointsNormalizedHA),CumDifGoalHANormalizedRot=lag(CumDifGoalNormalizedHA)))
+  accOrd<-accOrd[,c(1,2,3,6,7,30,24,31,25,26,27,32)]
+    }
+    return(accOrd)
+}
+```
+```{r}
+#Creating the function with all the variables involved measured by Season except previous matches for EDA
+EDA<-function(x){
+  acc <-
+    data.frame(Season = factor(),
+               Wk = integer(),
+               Team = factor(),
+               GF = integer(),
+               GA = integer(),
+               Points = integer(),
+               HomeAway = factor(),
+               Diff = integer(),
+               CumPoints = integer(),
+               CumDifGoal = integer (),
+               CumAvgPoints = integer(),
+               CumPointsHA = integer(),
+               CumDifGoalHA = integer (),
+               CumAvgPointsHA = integer())             
+  for (i in 1: 38) {
+    iDay<-subset(x,Wk=i)
+    iHome<-iDay[,c(1,2,6,11,12,14)]
+    iAway<-iDay[,c(1,2,8,12,11,15)]
+    iHome$HomeAway<-"H"
+    iAway$HomeAway<-"A"
+      iHome<-iHome%>%
+  rename(
+    Team=Home,
+    GF=HomeGoals,
+    GA=AwayGoals,
+    Points=HomePoints)
+    iAway<-iAway%>%
+  rename(
+    Team=Away,
+    GF=AwayGoals,
+    GA=HomeGoals,
+    Points=AwayPoints)
+  acc<-rbind(iHome,iAway)
+  acc$Diff<-acc$GF-acc$GA
+  accOrd<-acc[order(acc$Season,acc$Team,acc$Wk),]
+  accOrd<- data.frame(accOrd %>% group_by(Season,Team) %>% 
+  mutate(Cum_Points = cumsum(Points), CumDifGoal = cumsum(Diff), CumAvgPoints = cummean(Points) ))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Team,HomeAway) %>% 
+  mutate(Cum_PointsHA = cumsum(Points), CumDifGoalHA = cumsum(Diff), CumAvgPointsHA = cummean(Points) ))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk) %>% 
+  mutate(CumPointsNormalized=MinMax(Cum_Points)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk,HomeAway) %>% 
+  mutate(CumPointsNormalizedHA=MinMax(Cum_PointsHA)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk) %>% 
+  mutate(CumDifGoalNormalized=MinMax(CumDifGoal)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk,HomeAway) %>% 
+  mutate(CumDifGoalNormalizedHA=MinMax(CumDifGoalHA)))
+  accOrd$AvgPointsL5G<-rollmeanr(accOrd$Points, k = 5, fill = NA)
+  accOrd$AvgDifGoalL5G<-rollmeanr(accOrd$Diff, k = 5, fill = NA)
+  accOrd<-data.frame(accOrd %>% group_by(Season,Team)%>%
+  mutate(Cum_PointsRot=lag(Cum_Points),CumDifGoalRot=lag(CumDifGoal),CumAvgPointsRot=lag(CumAvgPoints),CumPointsNormalizedRot=lag(CumPointsNormalized),CumDifGoalNormalizedRot=lag(CumDifGoalNormalized),AvgPointsL5GRot=lag(AvgPointsL5G),AvgDifGoalL5GRot=lag(AvgDifGoalL5G)))
+  accOrd<-data.frame(accOrd %>% group_by(Season,Team,HomeAway)%>%
+mutate(Cum_PointsHARot=lag(Cum_PointsHA),Cum_DifGoalHARot=lag(CumDifGoalHA),CumAvgPointsHARot=lag(CumAvgPointsHA),CumPointsHANormalizedRot=lag(CumPointsNormalizedHA),CumDifGoalHANormalizedRot=lag(CumDifGoalNormalizedHA)))
+      }
+    return(accOrd)
+}
+```
+
+```{r}
+#Putting together all the data
+eplTotal<-tableEPL(epltotal)
+```
+# Exploratory Data Analysis
+```{r}
+epl19T<-EDA(epl19)
+epl18T<-EDA(epl18)
+epl17T<-EDA(epl17)
+epl16T<-EDA(epl16)
+epl15T<-EDA(epl15)
+epl14T<-EDA(epl14)
+```
+```{r}
+#Combining the data for EDA
+eplCombined<-rbind(epl14T,epl15T,epl16T,epl17T,epl18T,epl19T)
+```
+
+
+```{r}
+#Grouping by Week and playing Home/Away Team
+GroupByWeek<-group_by(eplCombined,Wk,HomeAway)
+pointsByWeekHA<- summarize(GroupByWeek,
+                           QtyPoints = sum(Points))
+pointsByWeekHA
+```
+
+```{r}
+p<-ggplot(pointsByWeekHA,aes(Wk,QtyPoints, color=HomeAway))+geom_point()+geom_line()+ labs(title= "Sum of points per week between Teams playing at home and away (last 6 seasons)",  x="Week", y = "Sum Quantity of Points")+ theme(plot.title = element_text(size=13))
+p
+```
+```{r}
+#Grouping by Week, Season and playing Home/Away Team
+GroupByWeekSeason<-group_by(eplCombined,Wk,HomeAway,Season)
+pointsByWeekSeasonHA<- summarize(GroupByWeekSeason,
+                           QtyPoints = sum(Points))
+pointsByWeekSeasonHA
+```
+```{r}
+p<-ggplot(pointsByWeekSeasonHA,aes(Wk,QtyPoints, color=HomeAway))+geom_point()+geom_line()+ labs(title= "Points per week and season between Teams playing at home and away (last 6 seasons)",  x="Week", y = "Sum Quantity of Points")+ theme(plot.title = element_text(size=13))+facet_wrap(~Season)
+p
+```
+```{r}
+p<-ggplot(pointsByWeekHA, aes(QtyPoints, fill=HomeAway))+geom_histogram(alpha=0.7, position="identity", aes(y = ..density..), color="black") +
+    geom_density(alpha=0.7) +
+    geom_vline(aes(xintercept=mean(eval(parse(text=QtyPoints)))), color="black", linetype="dashed", size=1) +
+    labs(title= "Histogram Sum of points per week between Teams playing at home and away (last 6 seasons)",  x="Points", y = "Density")+ theme(plot.title = element_text(size=11.5))
+     
+p
+```
+
+```{r}
+#Testing Normality
+shapiro.test(pointsByWeekHA$QtyPoints)
+```
+```{r}
+#Running T.test
+pointsByWeekH<-subset(pointsByWeekHA,HomeAway=="H")
+pointsByWeekA<-subset(pointsByWeekHA,HomeAway=="A")
+t.test(pointsByWeekH$QtyPoints,pointsByWeekA$QtyPoints,paired=TRUE)
+```
+```{r}
+#Subsetting data for last round of the season
+lastDateUpTo18<-subset(eplCombined,Wk==38 & Season<=18)
+lastDate19<-subset(eplCombined, Wk==29 & Season == 19)
+lastDate<-rbind(lastDate19,lastDateUpTo18)
+lastDate$Season<-as.numeric(lastDate$Season)
+```
+```{r}
+p<-ggplot(lastDate,aes(CumDifGoal,Cum_Points))+geom_point()+geom_smooth(method="lm",se=FALSE)+labs(title="Cumulative Goal Difference vs Points per Team (last date of last 6 seasons)", x= "Goal Difference per Team", y="Points per Team")
+p
+```
+```{r}
+#Grouping data by Team and Average Points and Goal Difference in the last 6 Seasons  
+byTeamLastDate<-group_by(lastDate,Team)
+AvgTeamLastDate<-summarize(byTeamLastDate,
+                           avgCumDifGoal=mean(CumDifGoal),
+                           avgCumPoints=mean(Cum_Points))
+```
+```{r}
+p<-ggplot(AvgTeamLastDate,aes(avgCumDifGoal,avgCumPoints))+geom_point()+geom_smooth(method="lm",se=FALSE)+labs(title="Average Cumulative Goal Difference vs Points per Team (last date of last 6 seasons)", x= "Goal Difference per Team", y="Points per Team")
+p
+```
+
+```{r}
+#Getting the ideal K
+set.seed(20)
+places<-data.frame(avgCumPoints=AvgTeamLastDate$avgCumPoints,avgCumDifGoal=AvgTeamLastDate$avgCumDifGoal)
+wss<-numeric(15)
+for (k in 1:15)
+  wss[k]=sum(kmeans(places, k,nstart=25)$withinss)
+wssResults<-data.frame(k=c(1:15),wss=wss)
+wssResults
+ggplot(wssResults,aes(k,wss))+geom_point()+geom_line()+labs(title= "Ideal Cluster Number. WSS vs k")
+```
+```{r}
+#Assigning clusters
+placesCluster<-kmeans(places,3,nstart=25)
+placesCluster
+```
+```{r}
+#Add the cluster assignment to each point
+AvgTeamLastDate$Cluster<-as.factor(placesCluster$cluster)
+#Get Centroids
+centroids<-as.data.frame(placesCluster$centers)
+centroids$Cluster<-as.factor(c(1:3))
+#Visualize cluster assignments
+ggplot(data=AvgTeamLastDate,aes(avgCumDifGoal,avgCumPoints,color=Cluster))+geom_point()+geom_point(data=centroids,aes(x=avgCumDifGoal,y=avgCumPoints,fill=Cluster),size=5,shape=13)+labs(title="Clusters assignment performance DG vs Points per Team (Avg Season's last date)",x= "Goal Difference per Team", y="Points per Team")
+```
+```{r}
+#Assigning clusters 
+eplCombinedClust<-(merge(eplCombined, AvgTeamLastDate[,c(1,4)], by = 'Team'))
+```
+```{r}
+lastDateClust<-(merge(lastDate, AvgTeamLastDate[,c(1,4)], by = 'Team'))
+byCluster<-group_by(lastDateClust,Cluster)
+byClusterAvg<-summarize(byCluster,
+                        avgGF=mean(GF),
+                        avgGA=mean(GA))
+byClusterAvgGF<-byClusterAvg[,c(1,2)]%>%
+  rename(
+    avgGoals=avgGF)
+byClusterAvgGF$Goal<-"GF"
+byClusterAvgGA<-byClusterAvg[,c(1,3)]%>%
+  rename(
+    avgGoals=avgGA)
+byClusterAvgGA$Goal<-"GA"
+byClusterAnalysis<-rbind(byClusterAvgGF,byClusterAvgGA)
+head(byClusterAnalysis)
+```
+```{r}
+byClusterAnalysis$avgGoals>-as.numeric(byClusterAnalysis$avgGoals)
+byClusterAnalysis$avgGoals <- round(byClusterAnalysis$avgGoals, digits = 2)
+p<-ggplot(byClusterAnalysis, aes(Goal,avgGoals, fill=Goal))+geom_bar(position="dodge",stat="identity") + geom_text(aes(label = avgGoals),size = 3, hjust = 0.5, vjust = 3, position =     "stack")+labs(title = "Comparison GF vs GA by cluster last date games(6 Seasons)", x="Goals for and Goals against", y="Goal Average")+facet_wrap(~Cluster)
+p
+```
+
+```{r}
+Home<-subset(eplCombined,HomeAway=="H")
+bySeasonResult<-group_by(Home,Season,Points)
+TableSeasonResult<-summarize(bySeasonResult,
+                             count=n())%>%  # count records by species
+ mutate(pct = count/sum(count))
+TableSeasonResult
+```
+```{r}
+TableSeasonResult$Points<-as.factor(TableSeasonResult$Points)
+p<-ggplot(TableSeasonResult, aes(Points,count, fill=Points))+geom_bar(stat="identity") + geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5),size = 2)  +labs(title = "Performance EPL teams playing at home stadium per Season",x="Result", y="Quantity")+facet_grid(~Season)
+p
+```
+```{r}
+QtyResultsHome<-c(nrow(subset(eplCombined,Points==3&HomeAway=="H")),nrow(subset(eplCombined,Points==0&HomeAway=="H")),nrow(subset(eplCombined,Points==1&HomeAway=="H")))
+resultsHome<-c("Victory","Defeat","Draw")
+homePerf<-data.frame("Quantity" = QtyResultsHome, "Result"= resultsHome)
+```
+```{r}
+p<-ggplot(homePerf, aes(Result,Quantity, fill=Result))+geom_bar(position="dodge",stat="identity") + geom_text(aes(label = Quantity),size = 3, hjust = 0.5, vjust = 3, position =     "stack")+labs(title = "Performance EPL teams playing at home stadium (last 6 seasons)",x="Result", y="Quantity")
+p
+```
+```{r}
+#Including Cluster in the table
+eplTTotal<-merge(eplTotal,AvgTeamLastDate[,c(1,4)], by.x = "Team", by.y = "Team")
+```
+
+
+```{r}
+#Putting in the same row the teams involved in one match
+home14<-subset(eplTTotal,HomeAway=="H")
+home14<-home14%>%
+  rename(
+    Home=Team,
+    HomeCumPointsNorm=CumPointsNormalizedRot,
+    HomeCumPointsHNorm=CumPointsHANormalizedRot,
+    HomeCumDifGoalNorm=CumDifGoalNormalizedRot,
+    HomeCumDifGoalHNorm=CumDifGoalHANormalizedRot,
+    HomeAvgPointsL5G=AvgPointsL5GRot,
+    HomeAvgDifGoalL5G=AvgDifGoalL5GRot,
+    HomeCluster=Cluster)
+epl14home<-merge(epltotal,home14[,c(1:3,7:13)], by=c("Home","Wk", "Season"))
+away14<-subset(eplTTotal,HomeAway=="A")
+away14<-away14%>%
+  rename(
+    Away=Team,
+    AwayCumPointsNorm=CumPointsNormalizedRot,
+    AwayCumPointsHNorm=CumPointsHANormalizedRot,
+    AwayCumDifGoalNorm=CumDifGoalNormalizedRot,
+    AwayCumDifGoalHNorm=CumDifGoalHANormalizedRot,
+    AwayAvgPointsL5G=AvgPointsL5GRot,
+    AwayAvgDifGoalL5G=AvgDifGoalL5GRot,
+    AwayCluster=Cluster)
+eplmatch<-merge(epl14home,away14[,c(1:3,7:13)], by=c("Away","Wk","Season"))
+```
+```{r}
+#Preparing the data into meaningful variables to be used
+eplPredictors<-eplmatch[,c(13,16:29)]
+```
+
+# Modeling
+```{r}
+#Splitting randomly
+eplPredictors$Result<-as.factor(eplPredictors$Result)
+
+smp_size <- floor(0.80 * nrow(eplPredictors))
+
+## set the seed to make the partition reproducible
+set.seed(456)
+train_ind <- sample(seq_len(nrow(eplPredictors)), size = smp_size)
+
+train <- eplPredictors[train_ind, ]
+test <- eplPredictors[-train_ind, ]   
+```
+```{r}
+#Naive Bayes Model
+Naivemodel<-naiveBayes(Result~.,data=train, laplace=1)
+laplace_prediction1<-predict(Naivemodel,test,type="class")
+Naivemodel
+```
+```{r}
+#Confusion Matrix NB
+table(test$Result,laplace_prediction1,dnn=c("Actual","Prediction"))
+confumatNaive<-data.frame(Actual=test$Result,Prediction=laplace_prediction1)
+```
+```{r}
+accuracyNaive<-data.frame("Accuracy"=nrow(subset(confumatNaive,Actual==Prediction))/nrow(confumatNaive))
+accuracyNaive
+```
+```{r}
+#Regression and Clasification Tree
+RFmodel<-rpart(Result~.,data=train, method="class")
+RF_prediction1<-predict(RFmodel,test,type="class")
+```
+```{r}
+#Confusion Matrix
+table(test$Result,RF_prediction1,dnn=c("Actual","Prediction"))
+confumatRF<-data.frame(Actual=test$Result,Prediction=RF_prediction1)
+```
+```{r}
+accuracyRF<-data.frame("Accuracy"=nrow(subset(confumatRF,Actual==Prediction))/nrow(confumatRF))
+accuracyRF
+```
+
+```{r}
+#ANN Model for classes setting size 
+train$Result<-as.factor(train$Result)
+#Build the model
+modelANN<-nnet(Result~HomeCumPointsNorm+HomeCumPointsHNorm + HomeCumDifGoalNorm + 
+    HomeCumDifGoalHNorm +AwayCumPointsNorm+AwayCumPointsHNorm + AwayCumDifGoalNorm + 
+    AwayCumDifGoalHNorm + HomeAvgPointsL5G + HomeAvgDifGoalL5G + AwayAvgPointsL5G + AwayAvgDifGoalL5G+ HomeCluster+AwayCluster,data=train,size = 3,decay = 0.0001,maxit = 500)
+test$pred_nnet<-predict(modelANN,test,type="class")
+```
+```{r}
+confmat<-data.frame("Prediction"=test$pred_nnet,"Actual"=test$Result)
+```
+```{r}
+accuracyANN<-data.frame("Accuracy"=0.4863014)
+accuracyANN
+```
+
+```{r}
+#Logistic Regression Model
+glmModel <- glm(data = train, Result ~  ., family = "binomial")
+predGLM <- predict(glmModel, newdata = test, type = "response")
+predGLMClass<-ifelse(predGLM<0.33,"A",ifelse(predGLM>0.33&predGLM<0.66,"D","H"))
+confumatLG<-data.frame(Actual=test$Result,Prediction=predGLMClass)
+accuracyGLM<-data.frame(Accuracy=nrow(subset(confumatLG,Actual==Prediction))/nrow(confumatLG))
+accuracyGLM
+```
+
+```{r}
+#Putting Accuracy values together
+accuracyANN$model<-"ANN"
+accuracyNaive$model<-"Naive Bayes"
+accuracyRF$model<-"Class. & Reg. Trees"
+accuracyGLM$model<-"Logistic Reg."
+bestAccuracyW<-rbind(accuracyANN,accuracyNaive,accuracyRF,accuracyGLM)
+byModelW<-group_by(bestAccuracyW,model)
+byModelWAcc<-summarize(byModelW,
+                       Avg=Accuracy)
+byModelWAcc$PreviousMatch<-"Without Previous Matches"
+```
+```{r}
+p<-ggplot(bestAccuracyW, aes(model,Accuracy,fill=model))+geom_bar(position="dodge",stat="identity") + geom_text(aes(label = round(Accuracy,digits=2)),size = 3, hjust = 0.5, vjust = 3, position =     "stack")+labs(title = "Comparison Accuracy per Model (Involving only performance in the campaign)",x="Model", y="Avg Accuracy")+theme(axis.text.x = element_text(angle = 45,size=8))
+p
+```
+# Adding variable Hystory performance matches
+```{r}
+#Adding a new column to the Analysis (Previous match in common)
+eplmatch$HomeAway<-paste(eplmatch$Home,eplmatch$Away)
+eplmatch$HomeAway<-as.factor(eplmatch$HomeAway)
+eplmatchC<-data.frame(eplmatch%>% group_by(HomeAway)%>%mutate(PrevGamPerf=cummean(HomePoints)))
+```
+
+```{r}
+#Selecting the meaningful variables
+eplPredictorsC<-eplmatchC[,c(13,16:29,31)]
+```
+
+
+```{r}
+#Splitting randomly
+eplPredictorsC$Result<-as.factor(eplPredictorsC$Result)
+
+smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(456)
+train_indC <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_indC, ]
+testC <- eplPredictorsC[-train_indC, ]   
+```
+```{r}
+#New Naive Model
+NaivemodelC<-naiveBayes(Result~.,data=trainC, laplace=1)
+laplace_prediction1C<-predict(NaivemodelC,testC,type="class")
+NaivemodelC
+```
+```{r}
+#Confusion Matrix
+table(testC$Result,laplace_prediction1C,dnn=c("Actual","Prediction"))
+confumatNaiveC<-data.frame(Actual=testC$Result,Prediction=laplace_prediction1C)
+```
+```{r}
+#Higher accuracy using the new variable
+accuracyNaiveC<-nrow(subset(confumatNaiveC,Actual==Prediction))/nrow(confumatNaiveC)
+accuracyNaiveC
+```
+```{r}
+#New Regression and Classification Tree
+RFmodelC<-rpart(Result~.,data=trainC, method="class")
+RF_prediction1C<-predict(RFmodelC,testC,type="class")
+```
+```{r}
+#Confusion Matrix
+table(testC$Result,RF_prediction1C,dnn=c("Actual","Prediction"))
+confumatRFC<-data.frame(Actual=testC$Result,Prediction=RF_prediction1C)
+```
+```{r}
+#Higher accuracy using the new variable
+accuracyRFC<-nrow(subset(confumatRFC,Actual==Prediction))/nrow(confumatRFC)
+accuracyRFC
+```
+
+```{r}
+#New ANN Model
+library(nnet)
+trainC$Result<-as.factor(trainC$Result)
+#Build the model
+modelANNC<-nnet(Result~HomeCumPointsNorm+HomeCumPointsHNorm + HomeCumDifGoalNorm + 
+    HomeCumDifGoalHNorm +AwayCumPointsNorm+AwayCumPointsHNorm + AwayCumDifGoalNorm + 
+    AwayCumDifGoalHNorm + HomeAvgPointsL5G + HomeAvgDifGoalL5G + AwayAvgPointsL5G + AwayAvgDifGoalL5G+ HomeCluster+AwayCluster+PrevGamPerf,data=trainC,size = 3,decay = 0.0001,maxit = 500)
+testC$pred_nnet<-predict(modelANNC,testC,type="class")
+```
+
+```{r}
+confmatC<-data.frame(Prediction=testC$pred_nnet,Actual=testC$Result)
+mtabC<-table(testC$pred_nnet,testC$Result)
+confusionMatrix(mtabC)
+```
+# Finding the best model
+```{r}
+#Function for different sizes and different samples in ANN
+accuracyANNsize<-function(trials){
+  acc <- data.frame(i = integer(),j= integer(),Accuracy= integer())
+  for(i in 450:trials) {
+  # random sample
+  smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+  for(j in 2:8){
+modelANNC<-nnet(Result~HomeCumPointsNorm+HomeCumPointsHNorm + HomeCumDifGoalNorm + 
+HomeCumDifGoalHNorm +AwayCumPointsNorm+AwayCumPointsHNorm + AwayCumDifGoalNorm + 
+AwayCumDifGoalHNorm + HomeAvgPointsL5G + HomeAvgDifGoalL5G + AwayAvgPointsL5G + AwayAvgDifGoalL5G+ HomeCluster+AwayCluster+PrevGamPerf,data=trainC,size = j,decay = 0.0001,maxit = 500)
+testC$pred_nnet<-predict(modelANNC,testC,type="class")
+confmatC<-data.frame(Prediction=testC$pred_nnet,Actual=testC$Result)
+accuracy<-nrow(subset(confmatC,Actual==Prediction))/nrow(confmatC)
+Size=j
+trial=i
+attempt <- data.frame(Trial = trial, Size=Size,Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+}
+}
+  return(acc)
+}
+```
+```{r}
+#Running the function for 77 combinations between sizes and random samples
+accuracyANN10<-accuracyANNsize(460)
+```
+
+```{r}
+head(accuracyANN10,100)
+```
+```{r}
+#Running Anova for all combinations 
+accuracyANN10$Size<-as.factor(accuracyANN10$Size)
+AnovaANNSize<-aov(accuracyANN10$Accuracy~accuracyANN10$Size)
+summary(AnovaANNSize)
+```
+Pvalue lower than alpha, there is significant difference for the Size, let's find out if this difference is enough to define the best size to work with or the worst size the work with
+```{r}
+TukeyHSD(AnovaANNSize)
+```
+According to Tukey results the only pair with a pvalue less than significance level is the pair 7-3, but to define the number of hidden layers equal to 7 as worse than the model with 3 hidden layers. There is no signifficant difference between size = 3 and the rest of the models with size different than 3 except 7. It can't be confirmed statistically that size impacts on the model. However let's set the size equal 3 for the comaprison with the rest of the models.   
+```{r}
+bySize<-group_by(accuracyANN10,Size)
+bySizeAvg<-summarize(bySize,
+                     avg=mean(Accuracy))
+bySizeAvg
+```
+
+
+```{r}
+#Function accuracy values per different samples
+accuracyANN<-function(trials){
+  acc <- data.frame(i = integer(),Accuracy= integer())
+  for(i in 450:trials) {
+  # random sample
+  smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+modelANNC<-nnet(Result~HomeCumPointsNorm+HomeCumPointsHNorm + HomeCumDifGoalNorm + 
+HomeCumDifGoalHNorm +AwayCumPointsNorm+AwayCumPointsHNorm + AwayCumDifGoalNorm + 
+AwayCumDifGoalHNorm + HomeAvgPointsL5G + HomeAvgDifGoalL5G + AwayAvgPointsL5G + AwayAvgDifGoalL5G+ HomeCluster+AwayCluster+PrevGamPerf,data=trainC,size = 3,decay = 0.0001,maxit = 500)
+testC$pred_nnet<-predict(modelANNC,testC,type="class")
+confmatC<-data.frame(Prediction=testC$pred_nnet,Actual=testC$Result)
+accuracy<-nrow(subset(confmatC,Actual==Prediction))/nrow(confmatC)
+trial=i
+attempt <- data.frame(Trial = trial, Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+}
+
+  return(acc)
+}
+```
+```{r}
+accuracyANN30<-accuracyANN(480)
+```
+```{r}
+head(accuracyANN30,31)
+```
+```{r}
+#Function accuracy values per different samples
+accuracyNB<-function(trials){
+  acc <- data.frame(i = integer(),Accuracy= integer())
+  for(i in 450:trials) {
+  # random sample
+  smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+NaivemodelC<-naiveBayes(Result~.,data=trainC, laplace=1)
+laplace_prediction1C<-predict(NaivemodelC,testC,type="class")
+confumatNaiveC<-data.frame(Actual=testC$Result,Prediction=laplace_prediction1C)
+accuracy<-nrow(subset(confumatNaiveC,Actual==Prediction))/nrow(confumatNaiveC)
+trial=i
+attempt <- data.frame(Trial = trial, Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+  }
+
+  return(acc)
+}
+```
+```{r}
+accuracyNB30<-accuracyNB(480)
+```
+```{r}
+head(accuracyNB30,31)
+```
+
+```{r}
+#Function accuracy values per different samples
+accuracyRF<-function(trials){
+  acc <- data.frame(i = integer(),Accuracy= integer())
+  for(i in 450:trials) {
+  # random sample
+  smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+RFmodelC<-rpart(Result~.,data=trainC, method="class")
+RF_prediction1C<-predict(RFmodelC,testC,type="class")
+confumatRF<-data.frame(Actual=testC$Result,Prediction=RF_prediction1C)
+accuracy<-nrow(subset(confumatRF,Actual==Prediction))/nrow(confumatRF)
+trial=i
+attempt <- data.frame(Trial = trial, Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+  }
+
+  return(acc)
+}
+```
+```{r}
+accuracyRF30<-accuracyRF(480)
+```
+```{r}
+head(accuracyRF30,31)
+```
+```{r}
+#Function accuracy values per different samples
+accuracyGLM<-function(trials){
+  acc <- data.frame(i = integer(),Accuracy= integer())
+  for(i in 450:trials) {
+  # random sample
+  smp_size <- floor(0.80 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+glmModel <- glm(data = trainC, Result ~  ., family = "binomial")
+predGLM <- predict(glmModel, newdata = testC, type = "response")
+predGLMClass<-ifelse(predGLM<0.33,"A",ifelse(predGLM>0.33&predGLM<0.66,"D","H"))
+confumatLG<-data.frame(Actual=testC$Result,Prediction=predGLMClass)
+accuracy<-nrow(subset(confumatLG,Actual==Prediction))/nrow(confumatLG)
+trial=i
+attempt <- data.frame(Trial = trial, Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+  }
+
+  return(acc)
+}
+```
+```{r}
+accuracyGLM30<-accuracyGLM(480)
+```
+```{r}
+head(accuracyGLM30,31)
+```
+
+```{r}
+#Putting all the accuracy values together
+accuracyANN30$model<-"ANN"
+accuracyNB30$model<-"Naive Bayes"
+accuracyRF30$model<-"Class. & Reg. Trees"
+accuracyGLM30$model<-"Logistic Reg."
+bestAccuracy<-rbind(accuracyANN30,accuracyNB30,accuracyRF30,accuracyGLM30)
+byModel<-group_by(bestAccuracy,model)
+byModelAvg<-summarize(byModel, 
+                      Avg=mean(Accuracy))
+byModelAvg$PreviousMatch<-"Involving Previous Matches"
+byModelAvg
+```
+```{r}
+p<-ggplot(byModelAvg, aes(model,Avg,fill=model))+geom_bar(position="dodge",stat="identity") + geom_text(aes(label = round(Avg,digits=2)),size = 3, hjust = 0.5, vjust = 3, position =     "stack")+labs(title = "Comparison Avg Accuracy per Model (31 Trials)",x="Model", y="Avg Accuracy")+theme(axis.text.x = element_text(angle = 45,size=8))
+p
+```
+```{r}
+png(filename="Accuracy.png")
+plot(p)
+dev.off()
+```
+
+```{r}
+#Comparing Models Using variables
+CompPreviousMatch<-rbind(byModelWAcc,byModelAvg)
+```
+```{r}
+p<-ggplot(CompPreviousMatch, aes(model,Avg,fill=model))+geom_bar(position="dodge",stat="identity") + geom_text(aes(label = round(Avg,digits=2)),size = 3, hjust = 0.5, vjust = 3, position =     "stack")+labs(title = "Comparison Accuracy per Model with/without Previous matches",x="Model", y="Avg Accuracy")+theme(axis.text.x = element_text(angle = 45,size=8))+facet_wrap(~PreviousMatch)
+p
+```
+```{r}
+png(filename="Accuracy1.png")
+plot(p)
+dev.off()
+```
+```{r}
+#Running Anova for the variables using previous match
+AnovaModel<-aov(bestAccuracy$Accuracy~bestAccuracy$model)
+summary(AnovaModel)
+```
+```{r}
+#Getting the best model 
+TukeyHSD(AnovaModel)
+```
+
+```{r}
+p<-ggplot(bestAccuracy,aes(Trial,Accuracy,color=model))+geom_line(size=1)+geom_point()+ylim(0.5,0.9)+labs(title = "Each model Accuracy per trials randomizing samples", x="Trial diferent random samples", y="Accuracy proportion")
+p
+```
+```{r}
+png(filename="Accuracy.png")
+plot(p)
+dev.off()
+```
+# Optimizing the model
+```{r}
+#Plotting model to select the variables impacting the decision
+rpart.plot(RFmodelC)
+```
+```{r}
+RFmodelC1<-rpart(Result~PrevGamPerf+AwayCumPointsNorm,data=trainC, method="class")
+RF_prediction1C1<-predict(RFmodelC1,testC,type="class")
+```
+```{r}
+#Confusion Matrix
+table(testC$Result,RF_prediction1C1,dnn=c("Actual","Prediction"))
+confumatRFC1<-data.frame(Actual=testC$Result,Prediction=RF_prediction1C1)
+```
+```{r}
+accuracyRFC1<-nrow(subset(confumatRFC1,Actual==Prediction))/nrow(confumatRFC1)
+accuracyRFC1
+```
+
+```{r}
+#Runing the function using only the variables impacting the decision
+accuracyRFOpt<-function(trials){
+  acc <- data.frame(i = integer(),Accuracy= integer())
+  for(i in 1:trials) {
+  # random sample
+  smp_size <- floor(0.70 * nrow(eplPredictorsC))
+
+## set the seed to make the partition reproducible
+set.seed(i)
+train_ind <- sample(seq_len(nrow(eplPredictorsC)), size = smp_size)
+
+trainC <- eplPredictorsC[train_ind, ]
+testC <- eplPredictorsC[-train_ind, ]  
+RFmodelC<-rpart(Result~PrevGamPerf+AwayCumPointsNorm,data=trainC, method="class")
+RF_prediction1C<-predict(RFmodelC,testC,type="class")
+confumatRF<-data.frame(Actual=testC$Result,Prediction=RF_prediction1C)
+accuracy<-nrow(subset(confumatRF,Actual==Prediction))/nrow(confumatRF)
+trial=i
+attempt <- data.frame(Trial = trial, Accuracy = accuracy)
+acc <- rbind(acc,attempt)
+  }
+
+  return(acc)
+}
+```
+```{r}
+accuracyRFOpt30<-accuracyRFOpt(51)
+```
+```{r}
+head(accuracyRFOpt30,51)
+```
+```{r}
+p<-ggplot(accuracyRFOpt30,aes(Trial,Accuracy))+geom_line(size=1,color="black")+geom_point()+ylim(0.5,0.9)+labs(title = "Accuracy per trials randomizing samples RPART Model Optimized ", x="Trial diferent random samples", y="Accuracy proportion")
+p
+```
+
+# Using the model to predict the next round
+
+```{r}
+epl2019$Date<- as.Date(epl2019$Date)
+epl19 <- epl2019[ , !duplicated(colnames(epl2019))]
+epl19 <- epl19 %>% filter(Date < Sys.Date()) %>% select(Season,Wk,Day,Date,Time,Home,Score,Away,Referee,Attendance)
+epl19$HomeGoals <- as.numeric(substr(epl19$Score,1,1))
+epl19$AwayGoals <- as.numeric(substr(epl19$Score,3,3))
+epl19$Result <- "D"
+epl19$Result[epl19$HomeGoals > epl19$AwayGoals] <- "H"
+epl19$Result[epl19$HomeGoals < epl19$AwayGoals] <- "A"
+epl19$HomePoints <- 1
+epl19$HomePoints[epl19$HomeGoals > epl19$AwayGoals] <- 3
+epl19$HomePoints[epl19$HomeGoals < epl19$AwayGoals] <- 0
+epl19$AwayPoints <- 1
+epl19$AwayPoints[epl19$HomeGoals > epl19$AwayGoals] <- 0
+epl19$AwayPoints[epl19$HomeGoals < epl19$AwayGoals] <- 3
+```
+```{r}
+epl19Round30<-subset(epl19,Wk<31)
+```
+
+```{r}
+#Creating the function with the reduced number of variables involved measured by Season except previous matches
+tableEPLOptimized<-function(x){
+  acc <-
+    data.frame(Season = factor(),
+               Wk = integer(),
+               Team = factor(),
+               GF = integer(),
+               GA = integer(),
+               Points = integer(),
+               HomeAway = factor(),
+               CumPoints = integer())             
+  for (i in 1: 38) {
+    iDay<-subset(x,Wk=i)
+    iHome<-iDay[,c(1,2,6,11,12,14)]
+    iAway<-iDay[,c(1,2,8,12,11,15)]
+    iHome$HomeAway<-"H"
+    iAway$HomeAway<-"A"
+      iHome<-iHome%>%
+  rename(
+    Team=Home,
+    GF=HomeGoals,
+    GA=AwayGoals,
+    Points=HomePoints)
+    iAway<-iAway%>%
+  rename(
+    Team=Away,
+    GF=AwayGoals,
+    GA=HomeGoals,
+    Points=AwayPoints)
+  acc<-rbind(iHome,iAway)
+  acc$Diff<-acc$GF-acc$GA
+  accOrd<-acc[order(acc$Season,acc$Team,acc$Wk),]
+  accOrd<- data.frame(accOrd %>% group_by(Season,Team) %>% 
+  mutate(Cum_Points = cumsum(Points)))
+  accOrd<- data.frame(accOrd %>% group_by(Season,Wk) %>% 
+  mutate(CumPointsNormalized=MinMax(Cum_Points)))
+  accOrd<-data.frame(accOrd %>% group_by(Season,Team)%>%
+  mutate(Cum_PointsRot=lag(Cum_Points),CumPointsNormalizedRot=lag(CumPointsNormalized)))
+      }
+    return(accOrd)
+}
+```
+```{r}
+#Putting allthe data together
+epltotalnew<-rbind(epl19Round30,epl18,epl17,epl16,epl15,epl14)
+```
+
+
+```{r}
+#Applying the function
+epltotalRound30<-tableEPLOptimized(epltotalnew)
+```
+
+```{r}
+#Putting in the same row the teams involved in one match
+home14Round30<-subset(epltotalRound30,HomeAway=="H")
+home14Round30<-home14Round30%>%
+  rename(
+    Home=Team,
+    HomeCumPointsNorm=CumPointsNormalizedRot)
+epl14homeRound30<-merge(epltotalnew,home14Round30[,c(1:3,7:12)], by=c("Home","Wk", "Season"))
+away14Round30<-subset(epltotalRound30,HomeAway=="A")
+away14Round30<-away14Round30%>%
+  rename(
+    Away=Team,
+    AwayCumPointsNorm=CumPointsNormalizedRot)
+eplmatchRound30<-merge(epl14homeRound30,away14Round30[,c(1:3,7:12)], by=c("Away","Wk","Season"))
+```
+```{r}
+eplmatchRound30$HomeAway<-paste(eplmatchRound30$Home,eplmatchRound30$Away)
+eplmatchRound30$HomeAway<-as.factor(eplmatchRound30$HomeAway)
+eplmatchRound30C<-data.frame(eplmatchRound30%>% group_by(HomeAway)%>%mutate(PrevGamPerf=cummean(HomePoints)))
+```
+```{r}
+#Preparing the data into meaningful variables to be used
+eplPredictorsRound30<-eplmatchRound30C[,c(1:4,13,27,29)]
+```
+```{r}
+#Setting as training all the data and testing for round 30
+eplPredictorsRound30<-eplPredictorsRound30[order(eplPredictorsRound30$Season,eplPredictorsRound30$Wk),]
+testRound30<-subset(eplPredictorsRound30,Season==19&Wk==30)
+testRound30<-testRound30[,-5]
+trainRound30<-head(eplPredictorsRound30,2190)
+```
+
+```{r}
+#prediction for Round 30
+RFRound30<-rpart(Result~PrevGamPerf+AwayCumPointsNorm,data=trainRound30, method="class")
+RF_predictionRound30<-predict(RFRound30,testRound30,type="class")
+testRound30$prediction<-RF_predictionRound30
+head(testRound30)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
