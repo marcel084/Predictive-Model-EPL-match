@@ -46,13 +46,13 @@ According to Tukey test, it could be confirmed that the best model, in terms of 
 The model predicted the Round 30 in the season 19-20 for the English Premier League
 Away         | Week          | Season      | Home   | Prediction
 ------------ | ------------- | ----------- |--------| ----------
-Arsenal | 30 | 19 | Brighton | Home
-Burnley | 30 | 19 | Manchester City | Home
-Chelsea | 30 | 19 | Aston Villa | Away
-Crystal Palace | 30 | 19 | Bournemouth | Draw
-Leicester City | 30 | 19 | Watford | Home
-Liverpool | 30 | 19 | Everton | Draw
-Manchester Utd | 30 | 19 | Tottenham | Draw
-Sheffield Utd | 30 | 19 | Newcastle Utd | Draw
-Southampton | 30 | 19 | Norwich City | Home
-Wolves | 30 | 19 | West Ham | Draw
+Arsenal | 30 | 19-20 | Brighton | Home
+Burnley | 30 | 19-20 | Manchester City | Home
+Chelsea | 30 | 19-20 | Aston Villa | Away
+Crystal Palace | 30 | 19-20 | Bournemouth | Draw
+Leicester City | 30 | 19-20 | Watford | Home
+Liverpool | 30 | 19-20 | Everton | Draw
+Manchester Utd | 30 | 19-20 | Tottenham | Draw
+Sheffield Utd | 30 | 19-20 | Newcastle Utd | Draw
+Southampton | 30 | 19-20 | Norwich City | Home
+Wolves | 30 | 19-20| West Ham | Draw
